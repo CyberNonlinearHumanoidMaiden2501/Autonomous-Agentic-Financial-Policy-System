@@ -471,3 +471,479 @@ P加仓为基本面未恶化时、更有吸引力且满足配置约束的价格�
 ## 15.4 维护与复盘
 
 财报和分红公告发布后更新预测；重大风险事件及时复核；每半年至一年检查资产质量、组合集中度及现金流目标。记录每次决策为什么改变，以便区分企业恶化、估值变化、数据修订和原判断失误。
+
+---
+
+# Dividend Stock Investment Strategy System — Product Design Logic and Judgment Criteria
+
+V1.1 Strategy Framework and Product Requirements Specification
+
+Revision date: October 16, 2026
+
+## Product Positioning
+
+The system is built around "quality companies paying sustained dividends, buying at low valuations, long-term holding for income, and dynamic fundamental risk control", connecting company research, price judgment, tranched position building, holding monitoring, and household cash-flow management into an explainable and reviewable decision process.
+
+The system serves individual investors and researchers with medium- to long-term capital arrangements. The first phase prioritizes A-shares, with account, currency, and tax conventions reserved for Hong Kong stocks and Stock Connect. It outputs research conclusions and candidate actions, and does not place orders automatically.
+
+**The core objective is sustainable after-tax cash flow and long-term total return**. Stable dividends cannot guarantee that principal will not lose value, and cash dividends cannot substitute for judgment about enterprise value.
+
+## Conventions on Parameter Usage
+
+The 30%–70% payout ratio, 4.5%/5%/6% dividend yields, historical valuation percentiles, position-building ratios, portfolio weights, and scoring weights in this document are all reference parameters pending backtesting, not proven trading rules. They should be recalibrated when industry conditions, interest rates, taxes, enterprise risks, or data quality change.
+
+The formulas in this document are definitional conventions; the fictitious examples are used to verify calculations and product behavior. Data fields, state transitions, and acceptance conditions are product implementation specifications. Passing product acceptance must not be interpreted as proof of strategy effectiveness.
+
+## Reading Path
+
+Chapters 1–4 cover objectives, the eight-dimension screening, industry differences, and financial sustainability; Chapters 5–7 cover valuation, price ranges, position building, and exits; Chapters 8–10 cover alerts, portfolio, and dividend taxes; Chapters 11–14 define scoring, user flows, data fields, and acceptance; Chapter 15 specifies backtesting and release requirements.
+
+# 1 Investment Objectives and System Boundaries
+
+## 1.1 Four Objectives
+
+| Objective | Judgment criteria |
+|----|----|
+| Cash-flow sustainability | The enterprise will be able to pay ordinary cash dividends for many years ahead, with dividends supported by earnings and cash flow or capital capacity. |
+| Reasonable purchase price | Verify the sustainable after-tax dividend yield, industry valuation, and margin of safety at the same time; do not pay an excessive price for a stable dividend. |
+| Long-term safety of principal | Avoid permanent loss of enterprise value as far as possible; it does not guarantee that the stock price will not fall or that net asset value will not draw down. |
+| Low-frequency management | Reviews driven by financial reports, dividend announcements, and major events, complemented by a full review every six months to one year. |
+
+## 1.2 Cash Income and Total Return Presented Separately
+
+For example, investing 1 million yuan and receiving 50,000 yuan in cash dividends while the position's market value falls by 200,000 yuan: ignoring taxes and other cash flows, the total return for the period is −15%. Receiving dividends must not be treated as proof of profit.
+
+For the simple case with no interim capital flows: period total return = (ending market value − beginning market value + net dividends received during the period − transaction costs) ÷ beginning market value. When there are additions, redemptions, or dividend reinvestment, use an explicit time-weighted or money-weighted convention to avoid double-counting dividends.
+
+Capital arrangements should be able to withstand a 20%–30% **drawdown** scenario and be tested against more severe conditions; this range is not the maximum loss limit. In principle, use funds that will not be needed for 3–5 years or more; near-term mandatory expenses should be covered by a separate cash reserve.
+
+## 1.3 First-Phase Features and Boundaries
+
+The first phase includes the stock pool, **eight-dimension research**, industry metrics, dividend history, valuation and price ranges, tranched plans, holding ledger, event alerts, cash-flow calculator, parameter versions, and report export. Build the screening model first, then the valuation model, and finally connect dynamic monitoring.
+
+The first phase does not provide automated trading, guaranteed-return promises, or buy instructions ranked solely by dividend yield. Targets whose **listed entity**, asset ownership, key data, or account tax conventions cannot be verified enter a "to be verified" status.
+
+## 1.4 Long-Term Discipline
+
+Look at the enterprise before the dividend; look at many years of dividends before the most recent year; determine value before determining price; **measure ranges using normalized dividends**; **re-check fundamentals before each tranche purchase**; handle quality deterioration and price fluctuation separately; manage after-tax cash flow and long-term total return at the same time.
+
+# 2 Eight-Dimension Stock Selection Framework
+
+The eight dimensions cover enterprise quality, purchase price, and unacceptable risks. Industry maturity is only an initial screening condition; no single high-scoring item can offset a verified material risk. Research conclusions must include evidence, explanation, date, and reviewer.
+
+| Dimension | Key data and judgment | System output |
+|----|----|----|
+| Industry maturity and moat | Demand stability, industry position, life cycle, competitive advantage, regulation and fee mechanisms | Maturity judgment and evidence of competitive advantage |
+| Dividend history | Observe at least 5 consecutive years, preferably 10; ordinary **DPS**, frequency of dividend cuts, special dividends, reasons for dividend changes | Years of consecutive payouts, normalized dividend trend |
+| Payout ratio and sustainability | Ordinary dividends ÷ net profit attributable to parent; multi-year dividends and cash coverage; 30%–70% is only an initial screening reference | Sustainability judgment and anomaly explanations |
+| Cash flow and liabilities | For non-financial enterprises: free cash flow, net debt, debt-servicing ability; for financial enterprises: capital and asset quality instead | Industry-specific financial health conclusion |
+| Purchase price | Forward after-tax dividend yield, historical valuation percentile, conservative intrinsic value and margin of safety | Position-building ceiling, add-on conditions, overvaluation warning price |
+| Earnings quality | Net profit attributable to parent and normalized profit, ROE, earnings volatility, one-off gains/losses | Long-term profitability and profit quality |
+| Dividend willingness and governance | Dividend policy, historical fulfillment, management capital allocation, shareholder returns, capital occupation | Policy credibility and governance assessment |
+| Material risks | Financial fraud, audit issues, damaged business model, policy and license changes | Veto, suspension, or to-be-verified status |
+
+## 2.1 Research Sequence
+
+First verify the security, the listed company, and the real operating assets; second, judge whether the enterprise has sustained earnings and dividend capacity; then examine the price; finally, examine whether the portfolio can accommodate the risk. "Industry is important" or "company is well-known" must not be equated with "a buyable listed target exists".
+
+Each item may use one of four research labels: qualified, watch, not qualified, insufficient data. Passing quality requires satisfying both the industry applicability conditions and the veto checks; a total score crossing a line alone is not enough.
+
+# 3 Industry Differences and Industry-Specific Analysis
+
+The first phase focuses on banks, utilities, energy, telecom, and infrastructure operators such as expressways. Being within the research scope does not mean all of them are quality dividend stocks.
+
+| Industry | Core metrics | Must-check risks and valuation approach |
+|----|----|----|
+| Banks | Normalized profit, sustainable ROE, capital adequacy ratio, NPL ratio, provision coverage, net interest margin, risk-weighted asset growth | Credit cycle, provision depletion, capital constraints on dividends; PB combined with ROE and cost of capital, supplemented by dividend yield |
+| Utilities | Operating cash flow, maintenance and expansion capex, debt, electricity pricing or fee mechanism, franchise rights | Water inflow, energy costs, expansion debt, policy adjustments; cross-check PE, FCF yield, and dividend yield |
+| Energy | Reserves, cost advantage, commodity prices, normalized cycle profit, capex | Stress tests on commodity price declines; normalized EV/EBITDA and mid-cycle dividend, avoiding the high-yield trap at the end of a boom |
+| Telecom operators | Free cash flow, capex, dividend policy, competitiveness | New technology investment and competitive erosion; FCF and EV/EBITDA, re-check policy fulfillment capability |
+| Expressways and other infrastructure | Traffic volume, toll concession term, maintenance cost, cash flow, reinvestment needs | Toll-right expiry and asset replacement; prefer DCF over the remaining concession term |
+
+## 3.1 Conventions That Must Not Be Mixed
+
+Net debt/EBITDA and free-cash-flow coverage for ordinary industrial and commercial enterprises cannot be mechanically applied to banks. Bank deposits, loans, and capital constraints have different economic meanings and should be replaced by industry capital, asset quality, and regulatory constraints.
+
+Mature energy companies still carry strong cyclical risk, and mature banks still carry credit risk. Industry maturity must not lead to assuming that profits and dividends are constant.
+
+## 3.2 Industry Templates
+
+Each industry template records the applicable scope, required metrics, metric direction, threshold version, anomaly explanations, valuation methods, and stress scenarios. When no industry template is configured, only factual data is shown; no full scoring or formal buy candidates are output.
+
+Regulatory floors and investment reference thresholds are stored separately. Regulatory floors are verified against currently effective rules; investment thresholds are calibrated through historical and out-of-sample testing.
+
+# 4 Dividend History and Financial Sustainability
+
+## 4.1 Dividend History Data
+
+Support storing at least 10 years of ordinary cash DPS, total annual cash dividends, number of payments, announcement and payment dates, special dividend flags, net profit attributable to parent, payout ratio, DPS year-over-year, and reasons for policy changes. With fewer than 5 years, flag insufficient history and do not fabricate consecutive payout years.
+
+Prioritize researching companies with stable or rising ordinary DPS, then compare their valuations and financials. An apparent decline caused by the end of special dividends, share splits or mergers, or convention adjustments is not automatically treated as a real dividend cut; first unify the per-share convention, then explain the normalized change.
+
+Ordinary dividends, special dividends, and one-off asset disposal proceeds are recorded separately. Large dividends produced by selling headquarters or core assets must not be extrapolated directly to the next ten years.
+
+## 4.2 Metric Definitions
+
+Profit payout ratio = total ordinary cash dividends attributable to the same profit year ÷ net profit attributable to parent for that year.
+
+Cash-flow coverage multiple = sustainable free cash flow ÷ total ordinary cash dividends. For general non-financial enterprises, base FCF = net operating cash flow − capital expenditure; the split between maintenance and expansion spending and adjustments for one-off items must be kept in detail.
+
+Also observe the trailing 5-year cumulative FCF ÷ cumulative ordinary dividends, net interest-bearing debt ÷ EBITDA, and interest coverage. A single year's net operating cash inflow must not be equated directly with distributable cash.
+
+| Situation | Judgment and handling |
+|----|----|
+| Profits and cash flow have covered dividends for many years | Prioritize research; continue checking investment needs, debt maturities, and restricted cash. |
+| Profits cover dividends but cash flow is persistently insufficient | Check receivables, working capital, capex, and profit quality. |
+| Debt has been used to maintain dividends for consecutive years | High risk; suspend buying and assess sustainability. |
+| Dividends rely on selling major assets | Remove the abnormal part from sustainable DPS and recompute prices. |
+| Payout ratio temporarily exceeds 100% | Check one-off gains/losses, cash reserves, and recovery ability; do not mechanically judge it permanently invalid. |
+
+## 4.3 Boundaries and Forecasts
+
+30%–70% is a preliminary screening range pending backtesting, not a hard elimination line for all industries. When net profit ≤ 0, the payout ratio is marked not applicable with a warning about loss-making dividends; when dividends are 0, coverage is marked not applicable — never display infinity as an "excellent value".
+
+The forecast sustainable DPS for the next 12 months must combine normalized earnings, a reasonable payout ratio, cash-flow or capital constraints, announced plans and policy, and give conservative/base/stress scenarios, recording assumptions, manual adjustments, and effective dates.
+
+# 5 Dividend Yield and Valuation Calculation
+
+## 5.1 Three Dividend Yields
+
+| Metric | Calculation | Purpose |
+|----|----|----|
+| Historical dividend yield (TTM) | Actual cash dividends over the past 12 months ÷ current price; ordinary and special parts shown separately | Describes dividends already paid; does not represent a future commitment |
+| Sustainable expected dividend yield | Forecast sustainable ordinary DPS for the next 12 months ÷ current price | Judges the cash return of a new investment, shown pre-tax and after-tax |
+| Cost-basis dividend yield | Expected annual DPS ÷ per-share cost of the holding | Describes the cash return of an existing holding; cannot substitute for current valuation |
+
+Example: last year's DPS was 1 yuan, the forecast sustainable DPS falls to 0.70 yuan, and the stock price is 15 yuan. The historical dividend yield is 6.67% and the forward dividend yield is 4.67%. Buy judgments should be based on future sustainable cash flow.
+
+Stock price, dividends, and holding cost must use a consistent currency, the same share-count convention, and explicit points in time. TTM is aggregated by actual payment dates, and the annual payout ratio by profit-attribution year, to avoid double counting across years.
+
+## 5.2 Historical Valuation Percentile
+
+| Valuation percentile range | Initial research status |
+|----|----|
+| [0%, 20%] | Undervalued research zone |
+| (20%, 40%] | Relatively cheap |
+| (40%, 60%] | Neutral valuation |
+| (60%, 80%] | Expensive |
+| (80%, 90%] | Overvaluation watch |
+| (90%, 100%] | In principle suspend new buys and evaluate trimming |
+
+Percentile references use 5-year or 10-year comparable historical samples and display the window, frequency, number of valid samples, and missing ratio. Implementation convention: percentile = (number of samples below the current metric + 0.5 × number of samples equal to the current metric) ÷ number of valid samples.
+
+This table applies to metrics such as PE and PB where higher values usually mean more expensive. Dividend yield and FCF yield point in the opposite direction and must not be applied directly. Negative PE, structural restructurings, and non-comparable samples must be excluded and disclosed; do not force a percentile when history is insufficient.
+
+A low percentile does not necessarily mean undervalued. A long-term downward drift in bank PB may reflect changes in ROE or asset quality; the comparability of the historical range must be re-checked.
+
+# Figure 1 Dividend Yield and Price
+
+![Figure 1 Dividend Yield and Price](media/image1.png)
+
+For the same 1 yuan of sustainable pre-tax dividend, target yields of 4.5%, 5%, and 6% correspond to prices of 22.22 yuan, 20 yuan, and 16.67 yuan respectively. The curve only expresses the mathematical relationship between price and yield; it does not express that risk necessarily decreases as price falls.
+
+If deteriorating earnings lead to a cut in sustainable DPS, the entire price curve must be recomputed. The actual position-building price is also constrained by the after-tax target return, industry valuation, and margin of safety.
+
+# 6 Buy Price Range and Tranched Position Building
+
+## 6.1 Three Gates and Price Formulas
+
+A stock becomes a formal buy candidate only when quality passes, the sustainable after-tax dividend yield meets the target, the industry valuation provides a margin of safety, and data completeness and portfolio constraints pass.
+
+P_target yield = forecast sustainable after-tax DPS ÷ target after-tax dividend yield.
+
+P_margin of safety = conservative intrinsic value × (1 − margin-of-safety ratio).
+
+P_build = min(P_target yield, P_margin of safety). This is the conditional maximum reference price for position building; it does not mean everything below this price should be bought unconditionally.
+
+P_add is the price at which, with fundamentals not deteriorated, the stock is more attractive and the allocation constraints are satisfied; P_overvalued is the warning price above the prudently estimated value. Each price needs its own valuation assumptions and version; do not artificially add 1 percentage point to the dividend yield as a substitute for a margin-of-safety valuation.
+
+Industry valuation may use earnings, cash-flow, or industry-specific models. Discounted-cash-flow illustration: V = Σ[CFt/(1+r)^t] + terminal value/(1+r)^T; FCFE is paired with the cost of equity, and FCFF with WACC, deducting net debt to convert to per-share value. Finite toll rights must not default to perpetuity; the terminal value must be based on renewal rights or residual value.
+
+## 6.2 Dividend-Yield-to-Price Example
+
+Assume sustainable pre-tax DPS = 1 yuan; the following is only a pre-tax mathematical example. Actual buying must switch to the account-appropriate after-tax convention and pass the remaining gates.
+
+| Target dividend yield | Corresponding price | Example research action |
+|----|----|----|
+| 3%/4% | 33.33 yuan / 25.00 yuan | Don't chase the price / observe |
+| 4.5% | 22.22 yuan | Start considering |
+| 5% | 20.00 yuan | Tranched buy candidate |
+| 6% | 16.67 yuan | May raise allocation after deep research |
+| 7% | 14.29 yuan | Prioritize screening for value traps |
+
+## 6.3 Position-Building Plan
+
+Reference: 3–6 tranches, or monthly tranches, 12 times a year; the first version tests four tranches of 20%/20%/30%/30%. They correspond, in order, to first entering the buy zone, further undervaluation, a new financial report confirming stability, and a higher margin of safety or a scheduled position-building condition being met.
+
+Ratios use the planned position of the single stock as the denominator, not household assets. Each add-on recomputes DPS, after-tax return, valuation, and portfolio limits; pause when fundamentals deteriorate, alerts are unhandled, or data becomes stale. When a price trigger and a scheduled trigger coincide, generate only one plan to avoid duplicate orders.
+
+# Figure 2 Tranched Position Building and Pause Conditions
+
+![Figure 2 Tranched Position Building and Pause Conditions](media/image2.png)
+
+For example, with a planned 100,000 yuan investment in one stock, the four planned tranches are 20,000, 20,000, 30,000, and 30,000 yuan. If a new financial report cannot confirm stable dividend capacity, the third tranche and later ones should be paused rather than executed automatically just to complete the position.
+
+Tranched (3–6) or monthly position building are execution methods pending validation; do not skip quality checks because a calendar deadline arrives or the price falls.
+
+# 7 Hold, Sell, and Removal
+
+## 7.1 Event-Handling Logic
+
+After significant price moves, financial report changes, or new announcements, first re-assess future earnings, cash flow, and dividend capacity, then judge price and position. Price changes by themselves do not directly decide trades.
+
+| Situation | Decision principle | Stock-pool handling |
+|----|----|----|
+| Fundamentals unchanged but stock price falls | Recompute the margin of safety; may hold; consider adding only when all position-building conditions are met | Retain research eligibility |
+| Fundamentals stable but valuation too high | Suspend buying; assess moderate trimming in light of cash-flow goals, taxes, alternative targets, and position size | Retain quality-enterprise eligibility |
+| Dividend capacity impaired and cause unclear | Suspend adding; check whether it is temporary; update stress scenarios | Mark for risk re-check |
+| Serious fraud or permanently damaged profit model | Start exit evaluation, recording evidence, disposal plan, and restrictions | Remove from the core pool after verification |
+
+## 7.2 Fundamental Exit Conditions
+
+Confirmed serious financial fraud, material capital occupation, or other unacceptable governance risks; major changes in operating licenses or key assets causing irreversible damage to the long-term profit model; ordinary dividends persistently losing support from earnings, cash flow, or capital capacity without a credible recovery path. These situations cannot be offset by high valuation scores just because the price is cheap.
+
+An ordinary dividend cut must be distinguished among operating deterioration, cyclical change, the end of special dividends, share adjustments, and capital arrangements. A material audit qualification first triggers a high-level check; not all audit matters are automatically equivalent to financial fraud.
+
+## 7.3 Manual Decisions and Audit Trails
+
+The exit evaluation records the triggering event, original investment thesis, evidence of change, expected impact, tradability, estimated taxes, decision maker, and time. Confirmed removal and actual selling are recorded separately; when trading is halted or liquidity is insufficient, keep the pending-disposal position with a risk notice.
+
+Valuation-driven trimming does not delete the enterprise research file; quality-driven removal retains historical ratings and evidence. Restoring eligibility requires new evidence and a complete re-do of the quality and risk review.
+
+The system does not set a uniform automatic stop-loss rule triggered directly by short-term declines. If the user sets separate trading constraints, they should be displayed and audited separately from the fundamental rules.
+
+# Figure 3 Hold and Exit Decisions
+
+![Figure 3 Hold and Exit Decisions](media/image3.png)
+
+Valuation-driven trimming and fundamental removal are different decisions. The former adjusts the number of shares held; the latter re-judges whether the enterprise still meets long-term investment criteria.
+
+For an apparent dividend cut caused by the end of special dividends or share changes, first restore the ordinary-dividend convention; only after confirming long-term damage to the dividend base should the corresponding exit procedures begin.
+
+# 8 Alerts and Review Mechanism
+
+Periodic reviews run in parallel with immediate responses to major events. Prices and announcements update at the frequency available from data sources; models are recomputed after financial report releases; a full review occurs every six months to one year. Numeric thresholds that are not yet configured display "to be set" — no default values may be silently used.
+
+| Monitored object | Trigger condition | System action |
+|----|----|----|
+| Dividend announcement | Ordinary dividend cancelled or significantly below the sustainable forecast | Red alert; recompute DPS and ranges, suspend adding pending review |
+| Normalized profit | Non-cyclical enterprise's profit clearly declines | Yellow alert; investigate operating and one-off factors |
+| Cash flow | Consecutive deterioration or cannot cover normal dividends | Yellow or red alert, graded by duration and cause |
+| Financial structure | Net debt, maturing debt, or refinancing pressure rises quickly | Suspend adding; redo debt-service scenarios |
+| Industry policy | Major changes in fees, licenses, or regulation | Re-assess long-term earnings and asset value |
+| Corporate governance | Fraud, major audit issues, serious capital occupation | High-level check; start removal when veto conditions are met |
+| Market price | Sudden crash or extreme valuation rise | Trigger a review; no automatic trading |
+| Portfolio allocation | Single-stock or industry weight exceeds limits | Evaluate rebalancing and allocation of new funds |
+
+## 8.1 States and Handling
+
+Alert states are new, to be verified, in progress, resolved, closed as false positive; when an event persists without new evidence, updates are merged, and new substantive evidence may upgrade the level. Unresolved red alerts block new buy candidates, yellow alerts prompt review; lifting a block requires stating the basis.
+
+Thresholds for price decline magnitude, profit decline magnitude, DPS deviation, consecutive deterioration periods, and debt changes are configured per industry and pending backtesting. With insufficient evidence, show only "suspected" — do not assert directly that a company has committed violations or suffered permanent damage.
+
+## 8.2 Alert Evidence Records
+
+Each alert stores the event ID, security, announcement title and link, publication time, time the system learned of it, reporting period, relevant financial values, previous forecast, new forecast, impact level, matched rule version, handling conclusion, and operation log.
+
+Product acceptance suggestion: within 15 minutes of receiving usable data, complete event ingestion, recomputation, and in-app notification; this target is an engineering goal and must be confirmed after data-source and load validation. Upstream delays are shown separately; do not fake real-time.
+
+# 9 Portfolio Allocation and Household Cash Flow
+
+## 9.1 Five-Step Planning
+
+First determine the passive cash flow needed each year; choose reinvestment or withdrawal according to life stage; build a diversified portfolio; prepare a cash pool to smooth mismatches between dividend arrivals and monthly spending; review asset quality and cash-flow goals every six months to one year.
+
+| Item | Initial reference pending backtest |
+|----|----|
+| Number of industries | At least 3, ideally 4–6; also check risk-factor correlations |
+| Single-stock weight | Usually no more than 10%–15% of the equity portfolio |
+| Single-industry weight | Usually no more than 30%–35% of the equity portfolio |
+| Number of companies | 8–15 researchable; the final number depends on quality and management capacity |
+| Cash reserve | Near-term mandatory expenses do not depend on dividends not yet received |
+| Rebalancing | Check every six months; re-check promptly on major events |
+
+Weights are computed on the equity portfolio's market value, with the share of household investable assets shown separately. Banks, energy, and utilities, though different industries, may still be affected by common macro, interest-rate, or policy factors; industry count alone cannot certify sufficient diversification.
+
+## 9.2 Cash-Flow Calculator
+
+Expected annual pre-tax dividends = Σ (shares held × expected annual ordinary DPS). Expected annual net dividends are aggregated after computing taxes per account, channel, holding lot, and currency; undeclared dividends are marked as forecasts, not receivables.
+
+Living-expense coverage = expected annual net dividends ÷ annual living expenses. Simplified estimate of target principal = annual cash-flow target ÷ assumed after-tax portfolio dividend yield; no valid principal estimate is output when the yield ≤ 0.
+
+Example: with 500,000 yuan principal, a 5% pre-tax dividend yield, and 150,000 yuan annual expenses, pre-tax dividends are 25,000 yuan and pre-tax coverage is 16.7%. If a 20% dividend tax applies to all of it, ignoring other costs and FX, net dividends are 20,000 yuan and net coverage is 13.3%. This is a static scenario and does not guarantee future income.
+
+## 9.3 Cash Pool and Stress Tests
+
+Show, by month, beginning cash, confirmed and forecast dividends, living withdrawals, net buying/selling, and ending cash. The cash-reserve target is set by the user in months of expenses; when below target, prompt adjustments to withdrawals, reinvestment, or allocation plans.
+
+At minimum, test ordinary dividend cuts, simultaneous stress in major industries, adverse FX moves, and large stock-price drawdowns. Dividend reinvestment is handled as new positions, avoiding counting the same money as both withdrawable cash and invested funds.
+
+# 10 Dividend Taxes and Cross-Market Conventions
+
+## 10.1 Differentiated Tax Treatment for A-Share Personal Holdings
+
+The following applies, within the prescribed scope, to listed-company stocks obtained by individuals from public issuance and transfer markets. The tax engine must identify the applicable conditions for each account and security and must not generalize them to all institutions, overseas accounts, or special share types.
+
+| Holding period | Effective dividend tax |
+|----|----|
+| Within 1 month (inclusive) | 20% |
+| More than 1 month up to 1 year (inclusive) | 10% |
+| More than 1 year | Temporarily exempt |
+
+Under Cai Shui [2015] No. 101 and related operational rules, dividends paid on holdings of less than 1 year are usually not withheld at payment; tax is computed and back-withheld upon transfer based on the actual holding period. Therefore cash received is not necessarily the final after-tax amount; the system should display potential back-tax and must not treat "not yet withheld" as tax-free.
+
+## 10.2 Stock Connect and Other Channels
+
+For dividends received by mainland individuals investing in Hong Kong stocks via Shanghai-Hong Kong Stock Connect or Shenzhen-Hong Kong Stock Connect, relevant rules generally withhold individual income tax at 20%; the withholding party and the treatment of tax already paid overseas and credits for H shares versus non-H shares should be verified against specific rules. Direct overseas accounts, other residency statuses, and institutional accounts must not simply apply this rate.
+
+For the same A+H company, compare after-tax dividend yield, price, FX, transaction costs, liquidity, and share conventions separately for each line. After-tax DPS = pre-tax sustainable DPS − applicable dividend tax; complex taxes are computed with itemized net amounts — do not mask different tax types with a single ratio.
+
+## 10.3 Product Requirements
+
+Store tax residency status, account type, investment channel, share class, purchase lots and dates, intended sale dates, applicable rules, and effective periods. When the holding period is unknown, provide 20%/10%/0% scenarios and do not directly assume future tax exemption. Months and years follow the applicable calendar-month and calendar-year rules — do not simply substitute 30 days or 365 days.
+
+Tax parameters are versioned by effective period; the current tax convention is kept separate from the rules in force at each backtest period. Official tax amounts are cross-checked against relevant regulations and the execution results of the depository and clearing agency and brokers.
+
+## 10.4 Regulatory Verification Records
+
+Verification date: October 16, 2026. The following regulatory references are kept for tax maintenance and do not serve as external endorsement of the investment strategy.
+
+Cai Shui [2015] No. 101: https://www.chinatax.gov.cn/n810341/n810755/c1797427/content.html
+
+Shanghai-Hong Kong Stock Connect tax rules: https://fgk.chinatax.gov.cn/zcfgk/c102416/c5204006/content.html
+
+Shenzhen-Hong Kong Stock Connect tax rules: https://fgk.chinatax.gov.cn/zcfgk/c102416/c5203646/content.html
+
+# 11 Scoring and Dynamic Decision Table
+
+## 11.1 Quality and Price Separated
+
+| Item | Weight | Key focus |
+|----|----|----|
+| Industry maturity and competitive advantage | 15 | Demand resilience, position, moat |
+| Dividend history | 15 | Consecutive payouts and ordinary DPS stability |
+| Payout ratio and sustainability | 15 | Normalized profit, ordinary dividends, coverage capacity |
+| Cash flow and liabilities | 20 | Cash quality, debt-servicing ability, or industry capital metrics |
+| Profitability | 10 | ROE, long-term profit and volatility |
+| Dividend policy and governance | 5 | Willingness, fulfillment, capital allocation |
+| Valuation and purchase price | 20 | Forward dividend yield, historical percentile, margin of safety |
+
+The first six items total 80 quality points, price accounts for 20 points, and the total is 100; material risks act as an independent veto layer with no separate positive weight that could be offset. All weights are pending backtesting.
+
+Implementation uses each dimension's 0–100 standardized score × weight ÷ 100. Each item must provide band definitions, industry applicability, and evidence; manual research scoring is allowed while band calibration is incomplete, and must be clearly flagged. The quality pass line is still pending backtesting and confirmation — do not secretly set automatic pass lines such as 60 or 70 points.
+
+Missing metrics score neither zero nor redistribute weight to the remaining items; show partial scores, the missing items, and "cannot fully judge". A formal buy candidate must pass quality, yield, valuation, risk, data, and portfolio constraints.
+
+## 11.2 Dynamic Decision Table Sample
+
+| Stock | Quality score | Expected after-tax dividend yield | Valuation percentile | Price status | Action |
+|----|----|----|----|----|----|
+| A (fictitious) | 74/80 | 5.8% | 18% | Relatively undervalued | Candidate buy |
+| B (fictitious) | 70/80 | 4.2% | 55% | Fair | Watch |
+| C (fictitious) | 76/80 | 3.1% | 92% | Expensive | Suspend buying |
+| D (fictitious) | 45/80 | 9.5% | 10% | Suspected trap | Do not include for now |
+
+The sample actions assume the corresponding manual quality reviews have been completed and only demonstrate the format; they do not mean the above scores automatically decide actions. The detail page shows dividend history, latest financials, price ranges, valuation ceilings, positions, alerts, scoring rationale, and update time.
+
+# 12 User Flows and Functional Requirements
+
+## 12.1 Complete User Flow
+
+1. Set up account and goals: enter capital size, cash-flow targets, living expenses, investment horizon, tax residency, channels, and risk constraints; confirm calculation conventions and parameter version.
+
+2. Create the research pool: select market and industry, verify the security and operating entity; review data by the eight dimensions, complete industry-specific information, and handle missing data and material risks.
+
+3. Form research conclusions: review ordinary and special dividends, payout ratio and coverage capacity, and record quality judgments, scoring evidence, and veto outcomes.
+
+4. Generate price ranges: confirm conservative/base/stress DPS, configure the after-tax target yield, valuation method, and margin of safety, and view the position-building ceiling, add-on conditions, and overvaluation warning price.
+
+5. Create the tranched plan: determine the single-stock planned position, number of tranches, and trigger conditions; the system checks cash, concentration, red alerts, and data freshness, and records the plan after user confirmation.
+
+6. Record holdings and cash: import or enter trades, lot costs, dividends, taxes, and withdrawals; display the cash-flow calendar, target coverage, and portfolio exposure.
+
+7. Handle alerts and reviews: view evidence and old/new forecasts, choose to keep holding, pause, add, trim, exit, or remove, and record reasons; review on schedule and export reports.
+
+## 12.2 Core Pages
+
+| Page | Operations or information that must be supported |
+|----|----|
+| Overview & cash flow | Pre-tax/after-tax forecasts, receipts and potential back-tax, monthly gaps, risks, and concentration |
+| Stock screening & detail | Industry filtering, eight-dimension evidence, scoring explanations, 10-year dividends, financials, and scenario prices |
+| Plans & holdings | Planned positions, tranche progress, actual lots, trading constraints, cost-basis dividend yield |
+| Alert center | Level, evidence, rule version, impact, owner, handling status, and audit records |
+| Parameters & reports | Industry templates, threshold status, tax rules, backtest versions, PDF and data export |
+
+## 12.3 Permissions and Explainability
+
+In the individual edition the user takes the research, confirmation, and operation roles; the multi-user edition can split research and review permissions. All manual changes keep the old value, new value, reason, and time. Any "candidate buy" should expand to show which conditions it passed and what condition changes would revoke that status.
+
+# 13 Data Dictionary and Update Rules
+
+Data sets are linked through security IDs, account IDs, event IDs, and version IDs. Values must store units, currency, reporting period, effective point in time, announcement time, time learned, and source links. Missing values use nulls with reason codes; 0 must not be substituted.
+
+| Data set | Core fields | Convention and update |
+|----|----|----|
+| Securities & industries | security_id, code, market, listed entity, industry, currency, asset scope, listing status | Update on entity/industry changes, keep historical mapping |
+| Dividend events | dividend_id, profit attribution year, ordinary/special DPS, amount, announcement/record/ex-dividend/payment dates, plan status | Proposal, approval, implementation, cancellation stored separately; deduplicate by event ID |
+| Annual dividend series | Ordinary DPS, special DPS, frequency, YoY, consecutive years, policy and reasons | Keep comparable after share adjustments; retain original figures |
+| Financial & industry metrics | Net profit attributable to parent, normalization adjustments, ROE, CFO, capex, FCF, net debt, EBITDA, interest; bank and other industry-specific metrics | Update after financial reports; restatements create new versions, do not overwrite original history |
+| Quotes & valuation | Price, time, currency, PE, PB, EV/EBITDA, FCF yield, window, sample count, percentile | At agreed frequency; distinguish adjusted analysis prices from actual trade prices |
+| Forecasts & models | Three-scenario DPS, growth assumptions, discount rate, margin of safety, target after-tax yield, three price levels, forecast basis | Keep model versions, manual overrides, and effective periods |
+| Accounts & holdings | Account identity, tax residency, channel, lot dates, quantity, cost, fees, dividends, tax amounts, FX | Update on trades and payouts; support reconciliation against broker statements |
+| Portfolio & plans | Target cash flow, living expenses, cash reserve, planned position, tranche ratios, trigger conditions, weight caps | Re-check portfolio constraints on every candidate action |
+| Risk & scoring | Eight-dimension labels, sub-scores, veto items, evidence, alert level, status, handler | Event-driven, keep decision snapshots |
+| Rules & audit | rule_id, version, applicable industry, thresholds, enabled status, backtest status, operation log | Published versions must not be silently rewritten |
+
+# 14 Data Quality and PRD Acceptance
+
+## 14.1 Data Quality Gate
+
+Dividend, financial, and announcement data preferentially use exchanges, listed companies, and reliable licensed data; quote records store the vendor and time. Financial restatements, share changes, currency conversions, and duplicate announcements must be handled. Formal buy judgments are blocked when DPS forecasts, industry templates, tax residency, or key financial data are missing.
+
+Data freshness is configured per field; on expiry or upstream failure, show the last successful update time and stop new conclusions that are affected. After recovery, recompute and keep before/after differences. Every output should be traceable back to the publicly available data of its time; hindsight information must not replace history.
+
+## 14.2 Executable Acceptance Cases
+
+| Case | Input or scenario | Expected result |
+|----|----|----|
+| Yield distinction | Historical DPS=1, forecast=0.7, price=15 | Historical 6.67%, forecast 4.67%, both displayed separately |
+| After-tax price | DPS=1, tax rate 20%, after-tax target 5%, margin-of-safety price 18 | Target price 16, build ceiling 16; pre-tax 20 must not be misused |
+| Payout anomaly | Net profit ≤ 0; or ordinary dividends = 0 | Show payout/coverage as not applicable respectively, with reasons |
+| Special dividend | Ordinary 0.5 + special 1.5, next year only ordinary 0.5 | Ordinary DPS did not fall; special dividends must not be extrapolated |
+| Percentile boundaries | 20%, 40%, 60%, 80%, 90%, 90.1% | Each falls into the single corresponding range in Chapter 5, with no overlap or gap |
+| Risk priority | Price cheap but a material risk is confirmed | Block buying; total score cannot offset a veto |
+| Tranched plan | Planned amount 100,000 yuan, four tranches 20/20/30/30 | Plan 2/2/3/3 ten-thousand yuan; pause the third tranche if the financial report fails |
+| Tax periods | 1-month boundary, 1-year boundary, beyond 1 year | Apply 20%, 10%, temporary exemption; check under calendar-period rules |
+| Cash flow | 500,000 yuan × 5%, expenses 150,000 yuan, tax 20% | Pre-tax 25,000; net 20,000; net coverage 13.3% |
+| Data & duplicates | Missing forecast; duplicate announcement; restatement | Block judgment; do not double-count dividends or alerts; versions traceable |
+| Status isolation | Overvalued trim; fundamental removal; halted pending exit | Retain eligibility, revoke eligibility, keep pending-disposal position respectively |
+
+# 15 Backtesting, Release, and Ongoing Maintenance
+
+## 15.1 Backtest Design
+
+Test at least 5–10 years of obtainable historical data, covering different interest-rate, commodity-price, and credit environments. Use the financial reports, dividend resolutions, tax rules, and security statuses knowable at the time; include delisted, halted, and dividend-cutting companies; control look-ahead and survivorship bias.
+
+Training, validation, and out-of-sample testing are separated, using rolling windows to check threshold stability. Transaction costs, trading restrictions, taxes, FX, dividend arrival timing, and reinvestment rules all enter the backtest; dividend forecasts may only be built from information available at the time.
+
+Evaluate total return, maximum drawdown, after-tax dividends, cash-flow volatility, dividend-cut exposure, turnover, concentration, alert false positives/negatives, and cash gaps. Compare against appropriate dividend benchmarks and a simple buy-and-hold strategy; do not show only the single parameter set with the best return.
+
+## 15.2 List of Parameters Pending Backtesting
+
+Dividend-history observation windows of 5/10 years; the 30%–70% payout ratio; the 4.5%/5%/6% dividend-yield examples and industry adjustments; valuation percentiles such as 20% and 90%; 3–6 tranches or monthly building and the 20/20/30/30 ratios; single-stock 10%–15%, industry 30%–35%, 3–6 industries, and a research universe of 8–15 names; the 80/20 quality-price split, per-dimension weights, and the quality pass line.
+
+Trigger values for profit, cash flow, debt, DPS deviation, and price anomalies, the margin-of-safety ratio, add-on ranges, and the overvaluation model must also be calibrated. The semi-annual to annual review frequency should be evaluated for maintenance cost and risk-response effectiveness. Backtesting cannot guarantee future performance.
+
+## 15.3 Release Acceptance
+
+Functional acceptance: all Chapter 14 cases pass, and the three buy gates, risk blocking, portfolio limits, tax scenarios, and state transitions are demonstrable. Amounts and ratios keep full precision internally and round as agreed for display; acceptance comparisons allow last-digit rounding differences at display precision.
+
+Data acceptance: spot-check dividends, financial reports, taxes, and holding statements, with reproducible calculations; key missing or stale data must not produce formal buy states. Performance acceptance verifies update times, failure retries, deduplication, and event-notification targets under the agreed stock pool and data volume.
+
+Documentation acceptance: the PDF and editable Word versions agree in body text, formulas, tables, and version, with correct headings and complete field and parameter definitions; all reference thresholds are clearly marked pending backtesting, with no unsupported statements of certain returns.
+
+Strategy release: parameters remain "research examples" until confirmed by backtesting and research; after validation is complete, record the applicable industries, sample, results, limitations, and approved version before enabling formal candidate output. Investment judgment remains subject to manual review.
+
+## 15.4 Maintenance and Review
+
+Update forecasts after financial reports and dividend announcements are released; re-check promptly on material risk events; review asset quality, portfolio concentration, and cash-flow goals every six months to one year. Record why each decision changed, so as to distinguish enterprise deterioration, valuation change, data revision, and original judgment errors.

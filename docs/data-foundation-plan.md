@@ -5,17 +5,20 @@
 > Inputs: [README.md](../README.md) (spec) · [data-sources.md](../research/data-sources.md) (verified sources) · [financial-ai-agent-landscape.md](../research/financial-ai-agent-landscape.md) (research)
 >
 > **Date:** 2026-11-21 · **Status:** draft for review
+> **v1.1 — revised for a free-only source strategy (proof-of-concept budget).**
 
 ---
 
 ## 1. Summary
 
 - **Problem:** every downstream conclusion in the system (scores, price points, alerts, backtests) needs data that is *complete, provably from the right moment in time, and traceable to a source*. Today no such layer exists.
-- **Sources:** Tushare Pro (¥200/yr) as primary for structured data (prices, financials, dividends — the only affordable point-in-time-capable feed); CNINFO as primary for announcements; Sina 7x24 for news; official sites (PBOC, NBS, NDRC, NEA, MOT, tax authority) for macro/policy/tax; Eastmoney + BaoStock + AkShare as free cross-validation channels.
+- **Budget decision (v1.1):** all sources are **free** for the POC. Tushare Pro (¥200/yr) is deferred and documented as the paid upgrade path — it is only bought if we later need vendor-guaranteed restatement history.
+- **Sources (free, live-verified where noted):** Eastmoney datacenter keyless JSON APIs as primary for structured data (statements carry `NOTICE_DATE`; dividends carry `PLAN_NOTICE_DATE`/`EX_DIVIDEND_DATE`/`ASSIGN_PROGRESS` — both verified 2026-11-21); CNINFO as primary for announcements; Sina 7x24 for news; BaoStock for cross-checking; official sites (PBOC, NBS, NDRC, NEA, MOT, tax authority) for macro/policy/tax; AkShare as a pinned adapter library.
 - **Method:** per-source poller workers → job queue → normalizers → append-only, versioned storage; dedup by natural keys; cross-source disagreement tracking; a freshness watchdog that blocks stale conclusions.
+- **Effectiveness, defined:** the pipeline's job is *collect → normalize → output effective data*: deduplicated, provenance-carrying, announcement-date-gated rows the core system can consume without trusting any vendor's current display. Perfection of historical restatements is explicitly out of scope (see §3.5).
 - **Stack recommendation:** PostgreSQL (system of record) + MinIO (raw payloads and PDFs) + DuckDB (backtest analytics) + Python workers. No heavyweight orchestrator in phase 1.
-- **Plan shape:** four phases — Phase 0 spikes (prove the risky assumptions), Phase 1 structured data, Phase 2 text sources, Phase 3 quality gates and backtest export. Each phase ends with executable acceptance tests (many already defined in README Ch. 14).
-- **Open items:** deployment location (mainland vs not), vendor storage terms review, BaoStock dividend coverage (needs an empirical test), whether intraday data is ever needed.
+- **Plan shape:** four phases — Phase 0 spikes (prove the risky assumptions, ¥0 spend), Phase 1 structured data, Phase 2 text sources, Phase 3 quality gates and backtest export. Each phase ends with executable acceptance tests (many already defined in README Ch. 14).
+- **Open items:** deployment location (mainland vs not), source terms-of-use review, BaoStock dividend coverage (needs an empirical test), whether intraday data is ever needed.
 
 ---
 
@@ -45,37 +48,36 @@ Operationally, the layer must also meet the spec's one latency target: announcem
 | R6 | Announcement latency target: 15 min from usable data to ingestion + recompute + notify | Ch. 8.2 |
 | R7 | Entity linkage: security_id / dividend_id / event_id / version_id join everything | Ch. 13 |
 | R8 | ID-stable, idempotent ingestion: re-runs safe, history replayable | implied by Ch. 13–14 |
-| R9 | Source priority & cross-validation: licensed/authoritative sources preferred | Ch. 14.1 |
+| R9 | Source priority & cross-validation: official/authoritative sources preferred | Ch. 14.1 |
 
-### 2.3 Data type → source mapping
-
-Condensed from [data-sources.md](../research/data-sources.md). "Method" is elaborated in §3.
+### 2.3 Data type → source mapping (free-only, v1.1)
 
 | # | Data type (spec Ch. 13) | Primary source | Backup / validation | Method |
 |---|---|---|---|---|
-| 1 | Securities master & industry | Tushare `stock_basic` | SSE/SZSE registers, Shenwan classification, AkShare | REST API, daily |
-| 2 | Quotes & valuation ratios | Tushare daily + `daily_basic` + `adj_factor` | BaoStock, Eastmoney (via AkShare) | REST API, EOD daily |
-| 3 | Financial statements & indicators | Tushare `income/balancesheet/cashflow/fina_indicator` (**PIT via `ann_date`+`update_flag`**) | CNINFO filings (PDF), BaoStock | REST API, event + periodic |
-| 4 | Dividend events & DPS series | Tushare `dividend` (full lifecycle) | Eastmoney `RPT_SHAREBONUS_DET`, AkShare `stock_fhps_em`, BaoStock, CNINFO | REST API, daily + on announcement |
+| 1 | Securities master & industry | AkShare code lists (Eastmoney) | SSE/SZSE registers, BaoStock, Shenwan classification | JSON API, daily |
+| 2 | Quotes & valuation ratios | AkShare daily OHLCV + 复权 (Eastmoney/Sina) | BaoStock bars & adjust factors | JSON API, EOD daily |
+| 3 | Financial statements & indicators | **Eastmoney datacenter keyless API** (`RPT_DMSK_FN_BALANCE/INCOME/CASHFLOW`) — `NOTICE_DATE` live-verified 2026-11-21 | BaoStock statements, CNINFO filing PDFs | JSON API, event + periodic |
+| 4 | Dividend events & DPS series | **Eastmoney `RPT_SHAREBONUS_DET`** — lifecycle fields live-verified (history from 2000) | BaoStock `query_dividend_data` (adds after-tax DPS + pay date), CNINFO announcements, SSE page | JSON API, daily + on announcement |
 | 5 | Announcements (full text) | CNINFO `hisAnnouncement/query` | SSE/SZSE disclosure search, AkShare | POST API, polled 5–15 min |
 | 6 | News | Sina 7x24 `zhibo` feed | 财联社 web, Eastmoney news | JSON feed, polled 5–10 min |
-| 7 | Research reports | 东方财富研报中心 | (scarcest category — see [data-sources.md](../research/data-sources.md) §7) | REST API, daily |
-| 8 | Macro / rates / FX | PBOC + Chinamoney + NBS | SAFE, Chinabond, Tushare macro | Web + export files, daily |
-| 9 | Industry policy & concessions | NDRC / NEA / MOT + company filings | Wind-style DBs (deferred, paid) | Web + filings, weekly |
+| 7 | Research reports | 东方财富研报中心 keyless API | (scarcest category — see [data-sources.md](../research/data-sources.md) §7) | JSON API, daily |
+| 8 | Macro / rates / FX | PBOC + Chinamoney + NBS | SAFE, Chinabond | Web + export files, daily |
+| 9 | Industry policy & concessions | NDRC / NEA / MOT + company filings | (paid DBs deferred indefinitely) | Web + filings, weekly |
 | 10 | Tax & legal rules | 国家税务总局法规库 | MOF, CSRC databases | Web, monthly + on change |
-| 11 | Corporate actions (股本变动/配股/回购) | Tushare `share_float`, buyback | CNINFO, AkShare, BaoStock factors | REST API, daily |
+| 11 | Corporate actions (股本变动/配股/回购) | AkShare (Eastmoney) | BaoStock adjustment factors, CNINFO | JSON API, daily |
 
 ### 2.4 Assumptions and open questions
 
 **Assumptions (stated so they can be corrected):**
 - Phase 1 is single-tenant (us), local or small-VPS deployment, Python throughout, Docker available.
-- No intraday/minute data in phase 1 (EOD prices only) — minute data costs extra at Tushare and nothing in the spec needs it yet.
-- Commercial terminals (Wind/iFinD/Choice) and JQData are out of scope for now (cost; JQData is mainland-only).
+- **Free-only sourcing for the POC (v1.1).** Tushare Pro remains documented as the upgrade path (§3.5 explains exactly what it would buy).
+- No intraday/minute data in phase 1 (EOD prices only) — nothing in the spec needs it yet, and free minute data is effectively nonexistent.
+- Commercial terminals (Wind/iFinD/Choice) and JQData are out of scope (cost; JQData is mainland-only).
 - Data volumes are tiny: ~5,400 A-share listings → ~1.3M daily price rows/yr, ~22k statements/yr, ~6k dividend events/yr, ~1M announcements/yr market-wide. Everything fits comfortably in PostgreSQL.
 
 **Open questions for us to answer before Phase 1:**
-1. Will deployment be inside mainland China? (Affects JQData eligibility and some site accessibility — CNINFO/Sina verified working from our current network.)
-2. Do Tushare/CNINFO terms permit our planned storage (internal use, no redistribution)? — partner to review; we store privately either way.
+1. Will deployment be inside mainland China? (Affects site accessibility — CNINFO/Sina/Eastmoney verified working from our current network.)
+2. Do Eastmoney/CNINFO terms permit our planned storage (internal use, no redistribution)? — partner to review; free does not mean term-free.
 3. Is the 15-minute SLA a hard requirement or a target? (Drives polling design vs. future paid push feeds.)
 4. Retention policy: keep raw payloads forever, or N years? (Cheap either way; policy matters for compliance.)
 
@@ -85,10 +87,10 @@ Condensed from [data-sources.md](../research/data-sources.md). "Method" is elabo
 
 ### 3.1 Acquisition methods, by preference
 
-1. **Official REST/JSON APIs (preferred).** Tushare Pro (SDK over HTTPS), CNINFO (`POST hisAnnouncement/query`, live-verified keyless), Eastmoney datacenter (keyless JSON, live-verified), Sina zhibo feed (live-verified). Deterministic, versionable, automatable.
+1. **Official keyless JSON APIs (preferred).** Eastmoney datacenter (`datacenter-web.eastmoney.com`, live-verified: statements with `NOTICE_DATE`, dividends with full lifecycle), CNINFO (`POST hisAnnouncement/query`, live-verified), Sina zhibo feed (live-verified). Deterministic, versionable, automatable — and more stable than HTML scraping because the JSON contract rarely changes.
 2. **Export endpoints.** Chinamoney (Excel), NBS `easyquery` (CSV/JSON), Chinabond (registered download). Semi-automatable; parsed into canonical schema.
 3. **Web pages / PDFs (controlled scraping, low frequency).** PBOC, NDRC, NEA, MOT, tax authority — policy documents and bulletins change slowly; poll weekly/monthly, store the raw document, extract the facts.
-4. **Adapter libraries as a channel, not an abstraction.** AkShare is a scraping adapter over Eastmoney/Sina/THS endpoints; it breaks when upstream pages change and has no SLA. Use it only for cross-validation reads, never as the primary pipeline.
+4. **Adapter libraries as a channel, not an abstraction.** AkShare is a scraping adapter over the same Eastmoney/Sina/THS endpoints; it breaks when upstream pages change and has no SLA. Use it where it is the most convenient wrapper, **pinned to a version**, with the raw responses archived — never as an irreplaceable dependency.
 5. **No push feeds** exist for our sources at this price point — so acquisition is **poll-based by design**, with cadences tuned per type (below). A paid push feed (e.g., Futu OpenD or commercial terminals) is the future escape hatch if the 15-min SLA ever fails on polling.
 
 ### 3.2 Pull cadences
@@ -99,8 +101,8 @@ Condensed from [data-sources.md](../research/data-sources.md). "Method" is elabo
 | Announcements (general market) | 15–30 min | CNINFO throttling limits full-feed polling; general lane backs the research pool |
 | News | 5–10 min | Alert context; Sina feed is cheap to poll |
 | Prices + adj factors + valuation | EOD daily (after 15:30 CST) + weekend repair | Trading calendar-driven |
-| Financial statements | Event-driven (report season) + daily sweep | Reports appear in windows (Apr/Aug/Oct); `ann_date` marks PIT |
-| Dividends & corporate actions | Daily + on announcement | Tushare `div_proc` lifecycle; CNINFO triggers re-check |
+| Financial statements | Event-driven (report season) + daily sweep | Reports appear in windows (Apr/Aug/Oct); `NOTICE_DATE` marks PIT |
+| Dividends & corporate actions | Daily + on announcement | Eastmoney `ASSIGN_PROGRESS` lifecycle; CNINFO triggers re-check |
 | Macro / rates / FX | Daily (rates, FX) / monthly (GDP, CPI already published) | Publication calendars |
 | Research reports | Daily | Low priority for alerts |
 | Industry policy | Weekly sweep | NDRC/NEA/MOT publication patterns |
@@ -123,9 +125,21 @@ as_of (data effective date) · report_period · currency/unit · version · raw_
 
 - **Idempotency:** natural keys per type (dividend: security + 预案公告日 + 方案; announcement: CNINFO `announcementId`; price: security + trade_date; statement: security + report_period + version).
 - **Retries with exponential backoff** through a job queue; dead-letter table for poison jobs; no silent drops.
-- **Rate-limit budgets per source** (Tushare tier limits, CNINFO informal throttling, pageSize 30); a per-source token schedule in config.
+- **Rate-limit budgets per source** (CNINFO informal throttling and pageSize 30; Eastmoney/Sina request courtesy); a per-source token schedule in config.
 - **Backfill/replay:** from the raw store, re-run normalizers; useful for schema fixes and cross-source re-validation.
-- **Cross-validation (R9):** for the handful of critical facts (dividend amounts/dates, statement totals), compare Tushare vs Eastmoney on ingestion; mismatches land in a `quality_disputes` table for the alert center to surface — never silently resolved.
+- **Cross-validation (R9):** for the handful of critical facts (dividend amounts/dates, statement totals), compare Eastmoney vs BaoStock on ingestion; mismatches land in a `quality_disputes` table for the alert center to surface — never silently resolved.
+
+### 3.5 Point-in-time strategy under free sources (v1.1 — the key trade-off)
+
+The paid Tushare tier's one irreplaceable feature was vendor-maintained restatement flags (`update_flag`). Free sources don't publish those — so we build the PIT property ourselves from three mechanisms:
+
+1. **Announcement-date gating (M1).** Use the vendor-provided notice dates as the availability axis: `NOTICE_DATE` on statements, `PLAN_NOTICE_DATE`/`EX_DIVIDEND_DATE` on dividends, CNINFO publish dates on announcements. **Both date fields live-verified working 2026-11-21** — this gives us "what was knowable when" for the whole history these APIs cover (statements and dividends back to ~2000).
+2. **Forward restatement detection (M2).** Re-poll each report period for N quarters after publication and store a hash of the values. If a re-fetch differs from what we recorded, that is a restatement → new version row with `observed_at`. No free vendor will tell us this; we become the detector. This means the system's PIT accuracy *grows over time* from the day we start polling.
+3. **The announcement archive (M3).** CNINFO PDF snapshots record what was announced and when — the event-side ground truth and the raw material for re-parsing.
+
+**Honest limitation, accepted for the POC:** historical restatements *before* we start snapshotting cannot be reconstructed from free sources (e.g., a 2022 statement revised in 2023 will look "already revised" to us in 2026). The practical impact is small for a POC — dividend-stock research depends far more on announcement dates and lifecycle states than on pre-revision financial minutiae — but it must be stated. **Tushare's ¥200/yr tier is the documented fix if this ever matters** (its `update_flag` encodes exactly this history). Nothing about the architecture changes either way: append-only rows, provenance envelope, and versioned storage serve both.
+
+One known gap to close in Phase 0: Eastmoney's dividend report has no pay-date field (verified absent). Fill it from BaoStock (`dividPayDate`) and CNINFO implementation announcements (实施公告) — both free.
 
 ---
 
@@ -176,11 +190,11 @@ A proper data platform: DAG orchestration, data catalog, warehouse (ClickHouse o
 
 ```mermaid
 flowchart TB
-    subgraph src["External sources"]
-        TS["Tushare Pro · structured"]
+    subgraph src["External sources · all free"]
+        EM["Eastmoney datacenter · structured"]
         CN["CNINFO · announcements"]
         SN["Sina 7x24 · news"]
-        EM["Eastmoney · validation"]
+        BS["BaoStock · cross-check"]
         OF["Official sites · macro policy tax"]
     end
     subgraph ing["Ingestion workers (per source)"]
@@ -230,13 +244,13 @@ flowchart TB
 
 > **Placeholder by design.** Detailed task breakdown, schema definitions, and per-phase tickets will be written here after we agree on the architecture option and the open questions in §2.4. Planned outline:
 
-1. **Phase 0 — Spikes (prove assumptions before building):**
-   - Spike A: Tushare `ann_date`/`update_flag` point-in-time probe on 5–10 banks/utilities (verifies R2 is achievable at ¥200/yr).
+1. **Phase 0 — Spikes (prove assumptions before building, ¥0 spend):**
+   - **Spike A — free-PIT probe:** 10 banks/utilities × 10 years. Verify Eastmoney statement `NOTICE_DATE` quality and coverage; verify dividend lifecycle fields incl. `ASSIGN_PROGRESS` transitions; fill the missing pay dates via BaoStock + CNINFO; build a toy as-of-2024-06-30 view and diff it against a naive "latest data" view (proves R2 is achievable for ¥0).
    - Spike B: CNINFO poller prototype — measure real throttling behavior and end-to-end publish→store latency (validates the 15-min SLA against R6).
    - Spike C: BaoStock `query_dividend_data` coverage test for years after 2017 (resolves the data-sources.md open flag).
 2. **Phase 1 — Structured core:** securities master, prices, financials, dividends, corporate actions. Schema, pollers, queue, MinIO archive, basic read API.
 3. **Phase 2 — Text sources:** CNINFO announcement pipeline (fast lane + general lane), Sina news, macro/policy/tax sweepers, research reports.
-4. **Phase 3 — Quality & serving:** freshness watchdog, cross-source dispute table, PIT parquet export to DuckDB, Ch. 14 acceptance suite wired as CI tests, latency dashboards for the 15-min SLA.
+4. **Phase 3 — Quality & serving:** freshness watchdog, cross-source dispute table, restatement snapshotting (M2), PIT parquet export to DuckDB, Ch. 14 acceptance suite wired as CI tests, latency dashboards for the 15-min SLA.
 
 *(Fill in: schema DDL, task list, effort estimates, test matrix.)*
 
@@ -246,21 +260,22 @@ flowchart TB
 
 ### 6.1 What is still missing (risks and gaps)
 
-1. **The point-in-time announcement archive has no off-the-shelf answer.** We must snapshot CNINFO ourselves (research doc §2.4). This is the single riskiest build — it is also unavoidable and now live-verified feasible.
-2. **The 15-min SLA vs. free-source throttling.** CNINFO has informal anti-crawler limits; the fast/general two-lane polling design is a hypothesis that Phase 0 Spike B must prove or break. If it breaks, the honest fallback is to state latency honestly (the spec itself demands this) and buy a push feed later.
-3. **Restatement semantics for dividends are not guaranteed by any vendor.** Tushare's `update_flag` covers statements; dividend *corrections* (修正公告) must be detected via CNINFO and treated as new versions. Our dedup keys must be designed for this.
-4. **Cross-source disputes need an owner.** The `quality_disputes` table flags mismatches, but someone (the partner) must define resolution policy — spec Ch. 14.1 says prefer licensed sources, which is a start but not a resolution rule.
-5. **Vendor terms.** Storing Tushare/CNINFO data (even privately) sits under their service terms — the partner should review before we scale storage. We only store for internal use; no redistribution.
-6. **The tax/legal data type is easy to under-build.** Rule *versions with effective dates* (Ch. 10.3) must be first-class from day one — retrofitting versioning onto a naive rules table is painful.
-7. **Ops fundamentals people forget in phase 1:** secrets management (no API keys in git), backup/restore drills for Postgres + MinIO, and an offboarding-free vendor page (AkShare endpoints break silently — our cross-validation should catch it, not an angry user).
-8. **Not yet decided:** whether the read API is internal-only (phase 1: yes, single service can call Postgres directly — but keep the watchdog's blocking semantics at the query layer from the start).
+1. **Unofficial-API fragility is now the top operational risk.** Eastmoney's keyless JSON APIs and AkShare's scraped endpoints can change or break without notice. Mitigations built into the plan: call keyless JSON directly wherever possible (not HTML), pin AkShare, archive every raw response (MinIO), and cross-validate Eastmoney vs BaoStock so silent breakage surfaces as disputes, not wrong conclusions.
+2. **The point-in-time announcement archive has no off-the-shelf answer.** We must snapshot CNINFO ourselves (research doc §2.4). This is the single riskiest build — it is also unavoidable and now live-verified feasible.
+3. **The 15-min SLA vs. free-source throttling.** CNINFO has informal anti-crawler limits; the fast/general two-lane polling design is a hypothesis that Phase 0 Spike B must prove or break. If it breaks, the honest fallback is to state latency honestly (the spec itself demands this) and buy a push feed later.
+4. **Restatement history is a consciously accepted gap.** Free sources give us announcement-date gating and forward snapshotting, but not the past's restatements (§3.5). For a dividend-POC this is a reasonable trade; the Tushare upgrade path stays documented in the plan.
+5. **The Eastmoney pay-date gap.** The dividend report lacks a pay date (verified); BaoStock + CNINFO fill it — but the join must be validated in Spike A, or cash-flow calendars will be wrong.
+6. **Cross-source disputes need an owner.** The `quality_disputes` table flags mismatches, but the partner must define resolution policy — spec Ch. 14.1 says prefer official sources, which is a start but not a resolution rule.
+7. **Source terms.** Storing Eastmoney/CNINFO data (even privately) sits under their service terms — free does not mean term-free; the partner should review before we scale storage. We only store for internal use; no redistribution.
+8. **The tax/legal data type is easy to under-build.** Rule *versions with effective dates* (Ch. 10.3) must be first-class from day one — retrofitting versioning onto a naive rules table is painful.
+9. **Ops fundamentals people forget in phase 1:** secrets management (even for keyless APIs, keep headers/cookies out of git), backup/restore drills for Postgres + MinIO, and monitoring that the *free* endpoints themselves haven't died.
 
 ### 6.2 Suggested architecture
 
-**Option B, concretely:** Python 3.12 workers (per-source poller processes) + a DB-backed job queue (arq or Celery with Postgres broker — no Redis needed) → PostgreSQL 16 with append-only, versioned tables and JSONB raw envelopes → MinIO for payloads → DuckDB + parquet for backtest exports → a thin FastAPI read layer with freshness-gated queries. Everything in one Docker Compose file. This gives failure isolation, replayability, and the PIT properties the spec demands, at the lowest ops cost I can justify — with a clean upgrade path to Option C only if the product becomes multi-tenant.
+**Option B, concretely:** Python 3.12 workers (per-source poller processes) + a DB-backed job queue (arq or Celery with Postgres broker — no Redis needed) → PostgreSQL 16 with append-only, versioned tables and JSONB raw envelopes → MinIO for payloads → DuckDB + parquet for backtest exports → a thin FastAPI read layer with freshness-gated queries. Everything in one Docker Compose file. This gives failure isolation, replayability, and the PIT properties the spec demands, at the lowest ops cost I can justify — with a clean upgrade path to Option C only if the product becomes multi-tenant. The free-only source change does not alter this architecture; it changes the adapter layer and adds the M1/M2/M3 mechanisms (§3.5).
 
 ### 6.3 Suggested implementation scheme
 
-Follow the phase order in §5, with one rule enforced throughout: **each phase ends with executable acceptance tests, most of them already written for us** — the README Ch. 14 cases (dedup, restatement versions, missing-forecast blocking, tax boundaries) plus our own PIT probes ("recompute 2024-03-31 as-of today vs as-of then; they must differ where restatements occurred"). Rough sizing: Phase 0 ≈ 1 week (the spikes decide feasibility, not the code), Phase 1 ≈ 2 weeks, Phase 2 ≈ 2 weeks, Phase 3 ≈ 1–2 weeks — a 6–7 week path to a data foundation the rest of the system can trust, which is the cheapest insurance this project will ever buy.
+Follow the phase order in §5, with one rule enforced throughout: **each phase ends with executable acceptance tests, most of them already written for us** — the README Ch. 14 cases (dedup, restatement versions, missing-forecast blocking, tax boundaries) plus our own PIT probes ("the as-of view built from `NOTICE_DATE`-gated rows must exclude the Q3 report before its publication day"). Rough sizing: Phase 0 ≈ 1 week (the spikes decide feasibility, not the code), Phase 1 ≈ 2 weeks, Phase 2 ≈ 2 weeks, Phase 3 ≈ 1–2 weeks — a 6–7 week path to a data foundation the rest of the system can trust, at a data cost of **¥0**.
 
-**My honest recommendation:** approve Option B and start Phase 0 Spike A immediately — the ¥200 Tushare tier and one afternoon answers whether the entire point-in-time requirement is satisfiable at our budget. Everything else in this plan is downstream of that one fact.
+**My honest recommendation:** approve Option B and start Phase 0 Spike A immediately. It costs nothing, and it answers the only question that matters before building: can a free stack actually deliver announcement-date-gated, cross-validated data for statements and dividends? The evidence so far (both APIs live-verified today) says yes — the spike proves whether it holds at depth.
